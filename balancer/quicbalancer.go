@@ -3,7 +3,7 @@ package quicbalancer
 import (
 	"sync"
 
-	qnet "github.com/gfanton/grpc-quic/net"
+	qnet "github.com/lnsp/grpc-quic/net"
 	ma "github.com/multiformats/go-multiaddr"
 
 	"golang.org/x/net/context"

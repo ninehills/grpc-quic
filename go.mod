@@ -1,4 +1,4 @@
-module github.com/gfanton/grpc-quic
+module github.com/lnsp/grpc-quic
 
 go 1.14
 
