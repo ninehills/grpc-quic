@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -15,7 +16,7 @@ type Conn struct {
 }
 
 func NewConn(sess quic.Session) (net.Conn, error) {
-	stream, err := sess.OpenStreamSync()
+	stream, err := sess.OpenStreamSync(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -41,9 +42,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 // Any blocked Read or Write operations will be unblocked and return errors.
 func (c *Conn) Close() error {
 	// @TODO: log this
-	c.stream.Close()
-
-	return c.sess.Close()
+	return c.stream.Close()
 }
 
 // LocalAddr returns the local network address.
@@ -104,12 +103,12 @@ func Listen(ql quic.Listener) net.Listener {
 
 // Accept waits for and returns the next connection to the listener.
 func (l *Listener) Accept() (net.Conn, error) {
-	sess, err := l.ql.Accept()
+	sess, err := l.ql.Accept(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := sess.AcceptStream()
+	s, err := sess.AcceptStream(context.Background())
 	if err != nil {
 		return nil, err
 	}
