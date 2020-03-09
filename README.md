@@ -1,1 +1,3 @@
-draft: GRPC over UDP (powered by QUIC)
+# quic-grpc
+
+This repository is a draft implementation of QUIC-over-UDP.

@@ -3,7 +3,6 @@ package grpcquic
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	options "github.com/lnsp/grpc-quic/opts"
 	"github.com/lnsp/grpc-quic/transports"
 	quic "github.com/lucas-clemente/quic-go"
-	ma "github.com/multiformats/go-multiaddr"
 	"google.golang.org/grpc"
 )
 
@@ -38,102 +36,54 @@ func newPacketConn(addr string) (net.PacketConn, error) {
 
 func newQuicDialer(tlsConf *tls.Config) func(string, time.Duration) (net.Conn, error) {
 	return func(target string, timeout time.Duration) (net.Conn, error) {
-		var err error
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 
-		m, err := ma.NewMultiaddr(target)
+		sess, err := quic.DialAddrContext(ctx, target, tlsConf, quicConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		laddr, protocol, err := qnet.ParseMultiaddr(m)
-		if err != nil {
-			return nil, err
-		}
-
-		if protocol == ma.P_UDP {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-
-			sess, err := quic.DialAddrContext(ctx, laddr, tlsConf, quicConfig)
-			if err != nil {
-				return nil, err
-			}
-
-			return qnet.NewConn(sess)
-		}
-
-		if protocol == ma.P_TCP {
-			return net.DialTimeout("tcp", laddr, timeout)
-		}
-
-		return nil, fmt.Errorf("Invalid protocol")
+		return qnet.NewConn(sess)
 	}
 }
 
-func Dial(target string, opts ...options.DialOption) (*grpc.ClientConn, error) {
+func Dial(addr string, opts ...options.DialOption) (*grpc.ClientConn, error) {
 	cfg := options.NewClientConfig()
 	if err := cfg.Apply(opts...); err != nil {
 		return nil, err
 	}
-
 	creds := transports.NewCredentials(cfg.TLSConf)
 	dialer := newQuicDialer(cfg.TLSConf)
 	grpcOpts := []grpc.DialOption{
 		grpc.WithDialer(dialer),
 		grpc.WithTransportCredentials(creds),
 	}
-
 	grpcOpts = append(grpcOpts, cfg.GrpcDialOptions...)
-	return grpc.Dial(target, grpcOpts...)
+	return grpc.Dial(addr, grpcOpts...)
 }
 
-func newListener(laddr string, tlsConf *tls.Config) (net.Listener, error) {
-	m, err := ma.NewMultiaddr(laddr)
+func newListener(addr string, tlsConf *tls.Config) (net.Listener, error) {
+	pconn, err := newPacketConn(addr)
 	if err != nil {
 		return nil, err
 	}
-
-	laddr, protocol, err := qnet.ParseMultiaddr(m)
+	ql, err := quic.Listen(pconn, tlsConf, quicConfig)
 	if err != nil {
 		return nil, err
 	}
-
-	if protocol == ma.P_UDP {
-		pconn, err := newPacketConn(laddr)
-		if err != nil {
-			return nil, err
-		}
-
-		ql, err := quic.Listen(pconn, tlsConf, quicConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		return qnet.Listen(ql), nil
-	}
-
-	if protocol == ma.P_TCP {
-		l, err := net.Listen("tcp", laddr)
-		if err != nil {
-			return nil, err
-		}
-		return l, nil
-	}
-
-	return nil, fmt.Errorf("Invalid protocol `%s`", m)
+	return qnet.Listen(ql), nil
 }
 
-func NewServer(laddr string, opts ...options.ServerOption) (*grpc.Server, net.Listener, error) {
+func NewServer(addr string, opts ...options.ServerOption) (*grpc.Server, net.Listener, error) {
 	cfg := options.NewServerConfig()
 	if err := cfg.Apply(opts...); err != nil {
 		return nil, nil, err
 	}
-
 	creds := transports.NewCredentials(cfg.TLSConf)
-	l, err := newListener(laddr, cfg.TLSConf)
+	l, err := newListener(addr, cfg.TLSConf)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return grpc.NewServer(grpc.Creds(creds)), l, err
 }
