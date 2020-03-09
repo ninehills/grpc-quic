@@ -36,13 +36,16 @@ func (c *ClientConfig) Apply(opts ...DialOption) error {
 func WithInsecure() DialOption {
 	return func(o *ClientConfig) error {
 		o.Insecure = true
+		o.TLSConf = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"grpc-quic-tls"}}
 		return nil
 	}
 }
 
 func WithTLSConfig(tlsConf *tls.Config) DialOption {
 	return func(o *ClientConfig) error {
-		o.TLSConf = tlsConf
+		cfg := tlsConf.Clone()
+		cfg.NextProtos = []string{"grpc-quic-tls"}
+		o.TLSConf = cfg
 		return nil
 	}
 }

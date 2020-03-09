@@ -2,6 +2,7 @@ package opts
 
 import (
 	"crypto/tls"
+	"fmt"
 
 	"google.golang.org/grpc"
 )
@@ -35,14 +36,15 @@ func (c *ServerConfig) Apply(opts ...ServerOption) error {
 // set.
 func Insecure() ServerOption {
 	return func(o *ServerConfig) error {
-		o.Insecure = true
-		return nil
+		return fmt.Errorf("server cannot be insecure")
 	}
 }
 
 func TLSConfig(tlsConf *tls.Config) ServerOption {
 	return func(o *ServerConfig) error {
-		o.TLSConf = tlsConf
+		cfg := tlsConf.Clone()
+		cfg.NextProtos = []string{"grpc-quic-tls"}
+		o.TLSConf = cfg
 		return nil
 	}
 }
